@@ -48,8 +48,8 @@ if df is not None:
     )
     keyword_list = [k.strip().lower() for k in keywords.split(",")]
 
-    min_budget = st.sidebar.slider("Minimum Budget", 0, 5000, 100)
-    max_bids = st.sidebar.slider("Max Bids", 0, 50, 20)
+    min_budget = st.sidebar.slider("Minimum Budget (USD)", 0, 500, 100, step=10)
+    max_bids = st.sidebar.slider("Max Bids", 0, 500, 20, step=5)
     min_score = st.sidebar.slider("Minimum Score", 0, 100, 40)
 
     # Scoring
@@ -105,6 +105,7 @@ if df is not None:
         st.write(f"**Bids:** {row['bid_count']}")
         st.write(f"**Client Verified:** {row['client_verified']}")
         st.write(f"**Score:** {row['score']} ({row['decision']})")
+        st.write(f"**Skills:** {', '.join(row['skills_list'])}")
 
         st.markdown("### 🧾 Description")
         st.write(row["description"])

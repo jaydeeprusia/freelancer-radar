@@ -1,4 +1,15 @@
 import pandas as pd
+from forex_python.converter import CurrencyRates
+
+_fx = CurrencyRates()
+
+def convert_to_currency(amount_usd: float, target_currency: str) -> float:
+    if target_currency in ("USD", "NA", None):
+        return amount_usd
+    try:
+        return float(_fx.convert("USD", target_currency, amount_usd))
+    except Exception:
+        return amount_usd
 
 
 def load_data(file):
