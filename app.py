@@ -15,13 +15,14 @@ auth_token = st.text_input("Freelancer Auth Token", type="password")
 query = st.text_input("Search Query (e.g. python, trading, scraping)", "python")
 limit = st.slider("Projects per page", 10, 50, 20, step=5)
 pages = st.slider("Number of pages (simulate unlimited)", 1, 20, 5)
-max_price = st.slider("Max Budget Filter", 0, 5000, 1000, step=100)
+max_price = st.slider("Max Budget Filter (USD)", 0, 5000, 1000, step=100)
+refresh_cache = st.checkbox("Refresh Cache")
 
 if st.button("🚀 Fetch Projects"):
     if not auth_token:
         st.error("Enter auth token")
     else:
-        df = fetch_projects(auth_token, query, limit, max_price, pages)
+        df = fetch_projects(auth_token, query, limit, max_price, pages, refresh_cache)
 
         st.session_state["df"] = df
         st.success(f"Fetched {len(df)} projects")
@@ -51,13 +52,18 @@ if df is not None:
     min_budget = st.sidebar.slider("Minimum Budget (USD)", 0, 500, 100, step=10)
     max_bids = st.sidebar.slider("Max Bids", 0, 500, 20, step=5)
     min_score = st.sidebar.slider("Minimum Score", 0, 100, 40)
+    languages = st.sidebar.multiselect(
+        "Preferred Languages",
+        options=df["language"].dropna().unique(),
+        default=["en"],
+    )
 
     # Scoring
     df["score"] = df.apply(lambda row: calculate_score(row, keyword_list), axis=1)
     df["decision"] = df["score"].apply(decision)
 
     # Apply filters
-    df_filtered = apply_filters(df, keyword_list, min_budget, max_bids, min_score)
+    df_filtered = apply_filters(df, keyword_list, min_budget, max_bids, min_score, languages)
 
     # Sort
     df_filtered = df_filtered.sort_values(by="score", ascending=False)

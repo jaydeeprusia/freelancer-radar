@@ -31,13 +31,16 @@ def save_to_cache(query, projects):
         json.dump(projects, f, ensure_ascii=False, indent=2)
 
 
-def fetch_projects(auth_token, query="", limit=20, max_price=100, pages=3):
+def fetch_projects(
+    auth_token, query="", limit=20, max_price=100, pages=3, refresh_cache=False
+):
 
     # 🔁 Try cache first
-    cached_df = load_from_cache(query)
-    if cached_df is not None:
-        print("Loaded from cache")
-        return cached_df
+    if not refresh_cache:
+        cached_df = load_from_cache(query)
+        if cached_df is not None:
+            print("Loaded from cache")
+            return cached_df
 
     all_projects = []
 
