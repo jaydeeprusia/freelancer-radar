@@ -21,7 +21,6 @@ A powerful Streamlit dashboard to **find, score, and analyze Freelancer.com proj
 | 🔎 **Advanced Filters** | Filter by budget (USD-normalised), bids, hours posted, client country, verified status, flags, skill count |
 | 💡 **AI-Style Insights** | Per-project "Why this is good" and "Risk factors" analysis |
 | 💾 **Daily Cache** | Avoid redundant API calls with automatic daily caching |
-| 📤 **CSV Export** | Export your top shortlisted projects instantly |
 
 ---
 
