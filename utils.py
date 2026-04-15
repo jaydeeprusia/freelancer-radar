@@ -23,7 +23,7 @@ def load_data(file):
 
 def normalize_data(df):
     # Ensure columns exist safely
-    def safe_get(d, key, default=0):
+    def safe_get(d, key, default: int | str | bool = 0):
         if isinstance(d, dict):
             return d.get(key, default)
         return default
@@ -71,5 +71,10 @@ def normalize_data(df):
     # Description safety
     if "description" not in df.columns:
         df["description"] = ""
+    
+    if "currency" in df.columns:
+        df["currency_code"] = df["currency"].apply(
+            lambda x: safe_get(x, "code", "NA") if isinstance(x, dict) else "NA"
+        )
 
     return df

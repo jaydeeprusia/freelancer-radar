@@ -12,15 +12,16 @@ st.header("🌐 Fetch Projects from Freelancer API")
 
 auth_token = st.text_input("Freelancer Auth Token", type="password")
 
-limit = st.slider("Projects per page", 10, 50, 20)
+query = st.text_input("Search Query (e.g. python, trading, scraping)", "python")
+limit = st.slider("Projects per page", 10, 50, 20, step=5)
 pages = st.slider("Number of pages (simulate unlimited)", 1, 20, 5)
-max_price = st.slider("Max Budget Filter", 0, 5000, 100)
+max_price = st.slider("Max Budget Filter", 0, 5000, 1000, step=100)
 
 if st.button("🚀 Fetch Projects"):
     if not auth_token:
         st.error("Enter auth token")
     else:
-        df = fetch_projects(auth_token, limit, max_price, pages)
+        df = fetch_projects(auth_token, query, limit, max_price, pages)
 
         st.session_state["df"] = df
         st.success(f"Fetched {len(df)} projects")
@@ -68,23 +69,39 @@ if df is not None:
         "title",
         "budget_min",
         "budget_max",
+        "currency_code",
         "bid_count",
         "client_verified",
         "score",
         "decision",
     ]
 
-    st.dataframe(df_filtered[display_cols], use_container_width=True)
+    st.dataframe(df_filtered[display_cols], width="stretch")
 
     # Select project
-    selected_index = st.selectbox("Select Project", df_filtered.index)
+    selected_index = st.selectbox(
+        "Select Project",
+        df_filtered.index,
+        format_func=lambda x: f"{x}: {df_filtered.loc[x, 'title']}",
+    )
 
     if selected_index:
         row = df_filtered.loc[selected_index]
+        sign = (
+            row["currency"]["sign"]
+            if "currency" in row and "sign" in row["currency"]
+            else "?"
+        )
+        code = (
+            row["currency"]["code"]
+            if "currency" in row and "code" in row["currency"]
+            else "NA"
+        )
 
         st.markdown("## 📌 Project Details")
-        st.write(f"**Title:** {row['title']}")
-        st.write(f"**Budget:** {row['budget_min']} - {row['budget_max']}")
+        url = f"https://www.freelancer.com/projects/{row['seo_url']}"
+        st.markdown(f"##### Title: [{row['title']}]({url})")
+        st.write(f"**Budget:** {sign}{row['budget_min']} - {sign}{row['budget_max']} ({code})")
         st.write(f"**Bids:** {row['bid_count']}")
         st.write(f"**Client Verified:** {row['client_verified']}")
         st.write(f"**Score:** {row['score']} ({row['decision']})")
