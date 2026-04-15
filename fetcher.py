@@ -32,7 +32,8 @@ def save_to_cache(query, projects):
 
 
 def fetch_projects(
-    auth_token, query="", limit=20, max_price=100, pages=3, refresh_cache=False
+    auth_token, query="", limit=20, max_price=100, pages=3, refresh_cache=False,
+    countries=None, languages=None
 ):
 
     # 🔁 Try cache first
@@ -59,11 +60,15 @@ def fetch_projects(
             "full_description": "true",
             "job_details": "true",
             "owner_info": "true",
-            "project_types[]": "fixed",
             "sort_field": "bid_count",
             "reverse_sort": "true",
             "max_price": max_price,
         }
+
+        if countries:
+            params["countries[]"] = countries
+        if languages:
+            params["languages[]"] = languages
 
         response = requests.get(BASE_URL, headers=headers, params=params)
 

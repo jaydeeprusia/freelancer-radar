@@ -1,7 +1,7 @@
 from utils import convert_to_currency
 
 
-def apply_filters(df, keyword_filter, min_budget, max_bids, min_score, languages):
+def apply_filters(df, keyword_filter, min_budget, max_bids, min_score, languages, locations=None):
     if keyword_filter:
         df = df[
             df["skills_list"].apply(
@@ -31,5 +31,8 @@ def apply_filters(df, keyword_filter, min_budget, max_bids, min_score, languages
 
     if languages:
         df = df[df["language"].isin(languages)]
+
+    if locations:
+        df = df[df["location_code"].isin(locations)]
 
     return df

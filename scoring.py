@@ -7,6 +7,9 @@ BEST_PRICE = 500  # USD
 GOOD_PRICE = 250  # USD
 FAIR_PRICE = 100  # USD
 
+BID_SCORE = 50
+CONSIDER_SCORE = 30
+
 
 def skill_match_score(skills, keywords):
     if not skills:
@@ -82,8 +85,8 @@ def calculate_score(row, keywords):
 
 
 def decision(score):
-    if score >= 70:
+    if score >= BID_SCORE:
         return "BID"
-    elif score >= 50:
+    elif score >= CONSIDER_SCORE:
         return "CONSIDER"
     return "SKIP"

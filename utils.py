@@ -1,7 +1,9 @@
+from typing import Any
 import pandas as pd
 from forex_python.converter import CurrencyRates
 
 _fx = CurrencyRates()
+
 
 def convert_to_currency(amount_usd: float, target_currency: str) -> float:
     if target_currency in ("USD", "NA", None):
@@ -34,7 +36,7 @@ def load_data(file):
 
 def normalize_data(df):
     # Ensure columns exist safely
-    def safe_get(d, key, default: int | str | bool = 0):
+    def safe_get(d, key, default: Any = 0):
         if isinstance(d, dict):
             return d.get(key, default)
         return default
@@ -82,10 +84,28 @@ def normalize_data(df):
     # Description safety
     if "description" not in df.columns:
         df["description"] = ""
-    
+
     if "currency" in df.columns:
         df["currency_code"] = df["currency"].apply(
             lambda x: safe_get(x, "code", "NA") if isinstance(x, dict) else "NA"
         )
 
+    if "language" not in df.columns:
+        df["language"] = "NA"
+
+    if "owner_info" not in df.columns:
+        df["location_code"] = "NA"
+    else:
+        df["location_code"] = df["owner_info"].apply(
+            lambda x: (
+                safe_get(safe_get(x, "country", {}), "code", "NA")
+                if isinstance(x, dict)
+                else "NA"
+            )
+        )
+
+    if "submitdate" not in df.columns:
+        df["submitdate"] = pd.Timestamp.now()
+    else:
+        df["submitdate"] = pd.to_datetime(df["submitdate"], unit="s").dt.strftime("%Y-%m-%d %H:%M:%S")
     return df

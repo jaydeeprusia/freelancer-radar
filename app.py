@@ -1,3 +1,4 @@
+import pycountry
 import streamlit as st
 import pandas as pd
 from utils import load_data, normalize_data
@@ -18,11 +19,20 @@ pages = st.slider("Number of pages (simulate unlimited)", 1, 20, 5)
 max_price = st.slider("Max Budget Filter (USD)", 0, 5000, 1000, step=100)
 refresh_cache = st.checkbox("Refresh Cache")
 
+COUNTRY_OPTIONS = {f"{c.name} ({c.alpha_2.lower()})": c.alpha_2.lower() for c in sorted(pycountry.countries, key=lambda x: x.name)}
+LANGUAGE_OPTIONS = {f"{l.name} ({l.alpha_2})": l.alpha_2 for l in sorted(pycountry.languages, key=lambda x: x.name) if hasattr(l, 'alpha_2')}
+
+selected_countries = st.multiselect("Countries", options=list(COUNTRY_OPTIONS.keys()), default=[])
+default_lang = [k for k in LANGUAGE_OPTIONS if LANGUAGE_OPTIONS[k] == "en"]
+selected_languages = st.multiselect("Languages", options=list(LANGUAGE_OPTIONS.keys()), default=default_lang[:1])
+
 if st.button("🚀 Fetch Projects"):
     if not auth_token:
         st.error("Enter auth token")
     else:
-        df = fetch_projects(auth_token, query, limit, max_price, pages, refresh_cache)
+        countries = [COUNTRY_OPTIONS[c] for c in selected_countries]
+        languages = [LANGUAGE_OPTIONS[l] for l in selected_languages]
+        df = fetch_projects(auth_token, query, limit, max_price, pages, refresh_cache, countries, languages)
 
         st.session_state["df"] = df
         st.success(f"Fetched {len(df)} projects")
@@ -52,10 +62,20 @@ if df is not None:
     min_budget = st.sidebar.slider("Minimum Budget (USD)", 0, 500, 100, step=10)
     max_bids = st.sidebar.slider("Max Bids", 0, 500, 20, step=5)
     min_score = st.sidebar.slider("Minimum Score", 0, 100, 40)
+    lang_options = df["language"].dropna().unique().tolist()
     languages = st.sidebar.multiselect(
         "Preferred Languages",
-        options=df["language"].dropna().unique(),
-        default=["en"],
+        options=lang_options,
+        default=[x for x in ["en"] if x in lang_options],
+        format_func=lambda x: (lang := pycountry.languages.get(alpha_2=x)) and f"{x} ({lang.name})" or x,
+    )
+
+    loc_options = df["location_code"].dropna().unique().tolist()
+    location = st.sidebar.multiselect(
+        "Preferred Locations",
+        options=loc_options,
+        default=[x for x in ["in"] if x in loc_options],
+        format_func=lambda x: (country := pycountry.countries.get(alpha_2=x.upper())) and f"{x} ({country.name})" or x,
     )
 
     # Scoring
@@ -63,7 +83,7 @@ if df is not None:
     df["decision"] = df["score"].apply(decision)
 
     # Apply filters
-    df_filtered = apply_filters(df, keyword_list, min_budget, max_bids, min_score, languages)
+    df_filtered = apply_filters(df, keyword_list, min_budget, max_bids, min_score, languages, location)
 
     # Sort
     df_filtered = df_filtered.sort_values(by="score", ascending=False)
@@ -80,15 +100,17 @@ if df is not None:
         "client_verified",
         "score",
         "decision",
+        "submitdate",
     ]
 
-    st.dataframe(df_filtered[display_cols], width="stretch")
+    st.dataframe(df_filtered[display_cols], width='stretch', height=500)
 
     # Select project
     selected_index = st.selectbox(
         "Select Project",
         df_filtered.index,
         format_func=lambda x: f"{x}: {df_filtered.loc[x, 'title']}",
+        placeholder="Type to search or select a project..."
     )
 
     if selected_index:
@@ -107,7 +129,8 @@ if df is not None:
         st.markdown("## 📌 Project Details")
         url = f"https://www.freelancer.com/projects/{row['seo_url']}"
         st.markdown(f"##### Title: [{row['title']}]({url})")
-        st.write(f"**Budget:** {sign}{row['budget_min']} - {sign}{row['budget_max']} ({code})")
+        escaped_sign = f"\\{sign}"
+        st.write(f"**Budget:** {escaped_sign}{row['budget_min']} - {escaped_sign}{row['budget_max']} ({code})")
         st.write(f"**Bids:** {row['bid_count']}")
         st.write(f"**Client Verified:** {row['client_verified']}")
         st.write(f"**Score:** {row['score']} ({row['decision']})")
