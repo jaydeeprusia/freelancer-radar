@@ -1,0 +1,20 @@
+{
+  "weights": {
+    "skill": 0.2,
+    "budget": 0.2,
+    "competition": 0.15,
+    "client": 0.15,
+    "urgency": 0.1,
+    "freshness": 0.1,
+    "complexity": 0.1
+  },
+  "enabled": {
+    "skill": true,
+    "budget": true,
+    "competition": true,
+    "client": true,
+    "urgency": true,
+    "freshness": true,
+    "complexity": true
+  }
+}

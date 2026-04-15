@@ -1,92 +1,204 @@
-from forex_python.converter import CurrencyRates
 from datetime import datetime, timedelta
+from forex_python.converter import CurrencyRates
 
-_currency_cache = {}
-_cache_duration = timedelta(hours=1)
-BEST_PRICE = 500  # USD
-GOOD_PRICE = 250  # USD
-FAIR_PRICE = 100  # USD
+_fx_cache: dict = {}
+_cache_ttl = timedelta(hours=1)
 
-BID_SCORE = 50
-CONSIDER_SCORE = 30
+DEFAULT_WEIGHTS = {
+    "skill":       0.25,
+    "budget":      0.20,
+    "competition": 0.15,
+    "client":      0.15,
+    "urgency":     0.10,
+    "freshness":   0.10,
+    "complexity":  0.05,
+}
+
+COMPLEXITY_KEYWORDS = [
+    "api", "machine learning", "ai", "blockchain", "scraping", "automation",
+    "nlp", "deep learning", "trading", "algorithm", "integration", "pipeline",
+]
 
 
-def skill_match_score(skills, keywords):
-    if not skills:
-        return 0
+def _get_usd_rate(currency_code: str) -> float:
+    if currency_code in ("USD", "NA", None):
+        return 1.0
+    key = f"{currency_code}_USD"
+    entry = _fx_cache.get(key)
+    if entry and datetime.now() - entry["ts"] < _cache_ttl:
+        return entry["rate"]
+    try:
+        rate = float(CurrencyRates().get_rate(currency_code, "USD"))
+        _fx_cache[key] = {"rate": rate, "ts": datetime.now()}
+        return rate
+    except Exception:
+        fallback = {"EUR": 1.1, "GBP": 1.25, "CAD": 0.75, "AUD": 0.65, "INR": 0.012}
+        return fallback.get(currency_code, 1.0)
+
+
+# ── Component scorers (each returns 0–100) ───────────────────────────────────
+
+def skill_score(row, keywords: list[str]) -> float:
+    skills = row.get("skills_list", [])
+    if not skills or not keywords:
+        return 0.0
     matches = sum(1 for s in skills if s.lower() in keywords)
-    return min(matches * 10, 40)
+    return min(matches / max(len(keywords), 1), 1.0) * 100
 
 
-def budget_score(min_budget, max_budget, currency_code="USD"):
-    c = CurrencyRates()
-    conversion_factor = 1.0
-    if currency_code != "USD":
-        cache_key = f"{currency_code}_to_USD"
-        current_time = datetime.now()
-
-        if (
-            cache_key in _currency_cache
-            and current_time - _currency_cache[cache_key]["timestamp"] < _cache_duration
-        ):
-            conversion_factor = _currency_cache[cache_key]["rate"]
-        else:
-            try:
-                conversion_factor = c.get_rate(currency_code, "USD")
-                # Cache the rate with current timestamp
-                _currency_cache[cache_key] = {
-                    "rate": conversion_factor,
-                    "timestamp": current_time,
-                }
-            except:
-                # Fallback to hardcoded rates if forex_python fails
-                if currency_code == "EUR":
-                    conversion_factor = 1.1
-                elif currency_code == "GBP":
-                    conversion_factor = 1.25
-                elif currency_code == "CAD":
-                    conversion_factor = 0.75
-                elif currency_code == "AUD":
-                    conversion_factor = 0.65
-
-    # Convert budget to USD equivalent for consistent scoring
-    converted_min = min_budget * conversion_factor
-    converted_max = max_budget * conversion_factor
-    avg = (converted_min + converted_max) / 2
-
-    if avg > BEST_PRICE:
-        return 20
-    elif avg > GOOD_PRICE:
-        return 12
-    elif avg > FAIR_PRICE:
-        return 6
-    return 2
+def budget_score(row) -> float:
+    avg_usd = row.get("avg_budget_usd", 0)
+    if avg_usd <= 0:
+        rate = _get_usd_rate(row.get("currency_code", "USD"))
+        avg_usd = ((row.get("budget_min", 0) + row.get("budget_max", 0)) / 2) * rate
+    if avg_usd >= 1000:
+        return 100.0
+    elif avg_usd >= 500:
+        return 75.0
+    elif avg_usd >= 200:
+        return 50.0
+    elif avg_usd >= 50:
+        return 25.0
+    return 10.0
 
 
-def competition_score(bids):
-    if bids < 5:
-        return 20
-    elif bids < 15:
-        return 10
-    return 3
+def competition_score(row) -> float:
+    bids = row.get("bid_count", 0)
+    if bids == 0:
+        return 100.0
+    elif bids <= 5:
+        return 80.0
+    elif bids <= 15:
+        return 50.0
+    elif bids <= 30:
+        return 25.0
+    return 10.0
 
 
-def client_score(verified):
-    return 20 if verified else 5
+def client_quality_score(row) -> float:
+    score = 0.0
+    if row.get("client_verified"):
+        score += 40.0
+    rep = row.get("client_reputation", 0.0) or 0.0
+    score += min(rep / 5.0, 1.0) * 30.0
+    age_days = row.get("client_account_age_days", 0) or 0
+    if age_days > 365:
+        score += 30.0
+    elif age_days > 90:
+        score += 15.0
+    return min(score, 100.0)
 
 
-def calculate_score(row, keywords):
-    score = 0
-    score += skill_match_score(row["skills_list"], keywords)
-    score += budget_score(row["budget_min"], row["budget_max"], row["currency_code"])
-    score += competition_score(row["bid_count"])
-    score += client_score(row["client_verified"])
-    return score
+def urgency_score(row) -> float:
+    score = 0.0
+    if row.get("flag_urgent"):
+        score += 60.0
+    if row.get("flag_featured"):
+        score += 25.0
+    if row.get("flag_premium"):
+        score += 15.0
+    return min(score, 100.0)
 
 
-def decision(score):
-    if score >= BID_SCORE:
+def freshness_score(row) -> float:
+    hrs = row.get("time_since_posted_hrs", 999)
+    if hrs <= 1:
+        return 100.0
+    elif hrs <= 6:
+        return 80.0
+    elif hrs <= 24:
+        return 60.0
+    elif hrs <= 72:
+        return 30.0
+    return 10.0
+
+
+def complexity_score(row) -> float:
+    desc = (row.get("description") or "").lower()
+    hits = sum(1 for kw in COMPLEXITY_KEYWORDS if kw in desc)
+    length_bonus = min(len(desc) / 2000, 1.0) * 30
+    keyword_bonus = min(hits / 5, 1.0) * 70
+    return min(keyword_bonus + length_bonus, 100.0)
+
+
+# ── Master scorer ────────────────────────────────────────────────────────────
+
+def calculate_score(row, keywords: list[str], weights: dict | None = None, enabled: dict | None = None) -> float:
+    w = {**DEFAULT_WEIGHTS, **(weights or {})}
+    e = enabled or {k: True for k in DEFAULT_WEIGHTS}
+
+    components = {
+        "skill":       skill_score(row, keywords),
+        "budget":      budget_score(row),
+        "competition": competition_score(row),
+        "client":      client_quality_score(row),
+        "urgency":     urgency_score(row),
+        "freshness":   freshness_score(row),
+        "complexity":  complexity_score(row),
+    }
+
+    active = {k: v for k, v in w.items() if e.get(k, True)}
+    total_weight = sum(active.values())
+    if total_weight == 0:
+        return 0.0
+
+    raw = sum((active[k] / total_weight) * components[k] for k in active)
+    return round(raw, 1)
+
+
+def get_component_scores(row, keywords: list[str]) -> dict:
+    return {
+        "skill":       round(skill_score(row, keywords), 1),
+        "budget":      round(budget_score(row), 1),
+        "competition": round(competition_score(row), 1),
+        "client":      round(client_quality_score(row), 1),
+        "urgency":     round(urgency_score(row), 1),
+        "freshness":   round(freshness_score(row), 1),
+        "complexity":  round(complexity_score(row), 1),
+    }
+
+
+def decision(score: float) -> str:
+    if score >= 65:
         return "BID"
-    elif score >= CONSIDER_SCORE:
+    elif score >= 40:
         return "CONSIDER"
     return "SKIP"
+
+
+def generate_insights(row) -> tuple[list[str], list[str]]:
+    good, risks = [], []
+
+    if row.get("bid_count", 99) <= 5:
+        good.append("Low competition")
+    if row.get("client_verified"):
+        good.append("Payment verified client")
+    if row.get("avg_budget_usd", 0) >= 500:
+        good.append("Decent budget")
+    if row.get("client_reputation", 0) >= 4.0:
+        good.append(f"High client rating ({row['client_reputation']:.1f}/5)")
+    if row.get("time_since_posted_hrs", 999) <= 6:
+        good.append("Fresh project")
+    if row.get("flag_urgent"):
+        good.append("Marked urgent")
+    if row.get("flag_featured"):
+        good.append("Featured listing")
+    if row.get("client_account_age_days", 0) >= 365:
+        good.append("Established client account")
+
+    if not row.get("client_verified"):
+        risks.append("Payment not verified")
+    if row.get("bid_count", 0) > 20:
+        risks.append(f"High competition ({row['bid_count']} bids)")
+    if row.get("avg_budget_usd", 0) < 30:
+        risks.append("Very low budget")
+    if row.get("client_account_age_days", 999) < 7:
+        risks.append("Brand new client account")
+    if row.get("client_reputation", 1) == 0.0:
+        risks.append("No client reviews")
+    if row.get("flag_nda"):
+        risks.append("NDA required")
+    if row.get("bid_velocity", 0) > 2:
+        risks.append("Rapidly attracting bids")
+
+    return good, risks
