@@ -1,4 +1,15 @@
 venv/
 __pycache__/
+*.pyc
+*.pyo
+.env
 data.json
-cache/*
+cache/
+*.json
+!requirements*.json
+shortlist.csv
+.vscode/
+.idea/
+*.egg-info/
+dist/
+build/
