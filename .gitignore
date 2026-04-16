@@ -7,6 +7,7 @@ data.json
 cache/
 *.json
 !requirements*.json
+!demo_data.json
 shortlist.csv
 .vscode/
 .idea/
