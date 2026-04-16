@@ -1,12 +1,12 @@
 
-# 🚀 Freelancer Alpha Dashboard
+# 📡 Freelancer Radar
 
 A powerful Streamlit dashboard to **find, score, and analyze Freelancer.com projects** before anyone else bids — giving you a real competitive edge.
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.56-red?logo=streamlit)
 ![License](https://img.shields.io/badge/License-MIT-green)
-![Stars](https://img.shields.io/github/stars/yourusername/freelancer-alpha-dashboard?style=social)
+![Stars](https://img.shields.io/github/stars/jaydeeprusia/freelancer-radar?style=social)
 
 ---
 
@@ -33,8 +33,8 @@ A powerful Streamlit dashboard to **find, score, and analyze Freelancer.com proj
 ## 🛠️ Installation
 
 ```bash
-git clone https://github.com/yourusername/freelancer-alpha-dashboard.git
-cd freelancer-alpha-dashboard
+git clone https://github.com/jaydeeprusia/freelancer-radar.git
+cd freelancer-radar
 python -m venv venv
 venv\Scripts\activate        # Windows
 # source venv/bin/activate   # macOS/Linux
@@ -154,4 +154,4 @@ MIT — see [LICENSE](LICENSE)
 
 If this tool saves you time finding freelance projects, please consider starring the repo!
 
-[![Star History Chart](https://api.star-history.com/svg?repos=yourusername/freelancer-alpha-dashboard&type=Date)](https://star-history.com/#yourusername/freelancer-alpha-dashboard)
+[![Star History Chart](https://api.star-history.com/svg?repos=jaydeeprusia/freelancer-radar&type=Date)](https://star-history.com/#jaydeeprusia/freelancer-radar)

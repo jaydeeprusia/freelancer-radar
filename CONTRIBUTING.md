@@ -1,12 +1,12 @@
-# Contributing to Freelancer Alpha Dashboard
+# Contributing to Freelancer Radar
 
 Thanks for your interest in contributing! Here's how to get started.
 
 ## Setup
 
 ```bash
-git clone https://github.com/yourusername/freelancer-alpha-dashboard.git
-cd freelancer-alpha-dashboard
+git clone https://github.com/jaydeeprusia/freelancer-radar.git
+cd freelancer-radar
 python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
