@@ -29,7 +29,7 @@ def skill_score(row, keywords: list[str]) -> float:
     matches = sum(
         1 for s in skills
         if any(
-            k in s or s in k or SequenceMatcher(None, s, k).ratio() > 0.8
+            k in s or s in k or SequenceMatcher(None, s, k).ratio() > 0.75
             for k in keywords
         )
     )
