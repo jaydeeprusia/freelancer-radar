@@ -53,7 +53,7 @@ with st.expander(
     )
 
     col1, col2, col3 = st.columns(3)
-    limit = col1.slider("Projects per page", 10, 50, 20, step=5)
+    limit = col1.slider("Projects per page", 10, 50, 20, step=10)
     pages = col2.slider("Pages to fetch", 1, 20, 5)
     max_price = col3.slider("Max Budget (USD)", 0, 5000, 1000, step=100)
 
@@ -194,13 +194,20 @@ with st.expander(
 st.sidebar.title("📡 Freelancer Radar")
 st.sidebar.divider()
 st.sidebar.header("🎯 Skill Keywords")
-keywords_raw = st.sidebar.text_input(
-    "Skills (comma separated)",
-    "python, api, automation, ai",
-    label_visibility="collapsed",
-)
-keyword_list = [k.strip().lower() for k in keywords_raw.split(",") if k.strip()]
+# Get all unique skills from the dataframe
+all_skills = set()
+for skills in df["skills_list"].dropna():
+    if isinstance(skills, list):
+        all_skills.update(skill.lower() for skill in skills)
+all_skills = sorted(list(all_skills))
 
+keywords_raw = st.sidebar.multiselect(
+    "Skills",
+    options=all_skills,
+    default=["python", "api", "automation", "ai"] if all(skill in all_skills for skill in ["python", "api", "automation", "ai"]) else all_skills[:4],
+    help="Select skills to match against projects"
+)
+keyword_list = [k.strip().lower() for k in keywords_raw if k.strip()]
 df["score"] = df.apply(
     lambda r: calculate_score(r, keyword_list, weights, enabled), axis=1
 )
@@ -291,14 +298,14 @@ display_cols = [
     "title",
     "budget_min_usd",
     "budget_max_usd",
-    "currency_code",
+    # "currency_code",
     "bid_count",
     "client_verified",
     "client_reputation",
     "time_since_posted_hrs",
     "skill_count",
-    "flag_urgent",
-    "flag_featured",
+    # "flag_urgent",
+    # "flag_featured",
     "score",
     "decision",
     "submitdate",
@@ -418,9 +425,9 @@ with st.expander("📐 Score Breakdown"):
 with st.expander("🧾 Description", expanded=True):
     st.write(row["description"])
 
-# ── AI Insights ───────────────────────────────────────────────────────────────
+# ── Insights ───────────────────────────────────────────────────────────────
 st.divider()
-st.subheader("🧠 AI Insights")
+st.subheader("🧠 Insights")
 good, risks = generate_insights(row)
 
 icol1, icol2 = st.columns(2)
@@ -437,3 +444,9 @@ with icol2:
         st.warning(r_)
     if not risks:
         st.success("No significant risks detected.")
+
+
+# ── Export ────────────────────────────────────────────────────────────────────
+if st.button("📤 Export Top 15"):
+    df_filtered.head(15).to_csv("shortlist.csv", index=False)
+    st.success("Exported shortlist.csv")

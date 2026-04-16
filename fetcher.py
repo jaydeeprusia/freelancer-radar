@@ -1,11 +1,19 @@
+import tomllib
 import requests
 import pandas as pd
 import os
 import json
+from pathlib import Path
 from datetime import datetime
 
-BASE_URL = "https://www.freelancer.com/api/projects/0.1/projects/active"
-CACHE_DIR = "cache"
+_cfg_path = Path(__file__).parent / "config.toml"
+with open(_cfg_path, "rb") as _f:
+    _cfg = tomllib.load(_f)
+
+BASE_URL  = _cfg["api"]["base_url"]
+SORT_FIELD   = _cfg["api"]["sort_field"]
+REVERSE_SORT = str(_cfg["api"]["reverse_sort"]).lower()
+CACHE_DIR    = _cfg["cache"]["directory"]
 
 os.makedirs(CACHE_DIR, exist_ok=True)
 
@@ -60,8 +68,8 @@ def fetch_projects(
             "full_description": "true",
             "job_details": "true",
             "owner_info": "true",
-            "sort_field": "bid_count",
-            "reverse_sort": "true",
+            "sort_field": SORT_FIELD,
+            "reverse_sort": REVERSE_SORT,
             "max_price": max_price,
         }
 
@@ -69,6 +77,8 @@ def fetch_projects(
             params["countries[]"] = countries
         if languages:
             params["languages[]"] = languages
+        
+        params["project_types[]"] = "fixed"  # Only fixed-price projects for now
 
         response = requests.get(BASE_URL, headers=headers, params=params)
 

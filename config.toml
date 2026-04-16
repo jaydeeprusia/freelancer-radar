@@ -1,0 +1,99 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Freelancer Radar — Central Configuration
+# Edit this file to tune scoring, thresholds, and API behaviour.
+# ─────────────────────────────────────────────────────────────────────────────
+
+[scoring]
+
+# Decision thresholds (0–100)
+threshold_bid = 45
+threshold_consider = 25
+
+# Default factor weights (auto-normalised, so only ratios matter)
+[scoring.weights]
+skill = 0.25
+budget = 0.20
+competition = 0.15
+client = 0.10
+urgency = 0.10
+freshness = 0.12
+complexity = 0.08
+
+# Budget score breakpoints (USD)
+[scoring.budget_tiers]
+excellent = 500 # score = 100
+good = 150      # score = 75
+fair = 50       # score = 50
+low = 15        # score = 25
+# below low → score = 10
+
+# Competition score breakpoints (bid count)
+[scoring.competition_tiers]
+excellent = 0 # score = 100
+good = 8      # score = 80
+fair = 20     # score = 50
+low = 40      # score = 25
+# above low → score = 10
+
+# Freshness score breakpoints (hours since posted)
+[scoring.freshness_tiers]
+excellent = 2 # score = 100 
+good = 12     # score = 80  
+fair = 48     # score = 60  
+low = 96      # score = 30  
+# above low → score = 10
+
+# Client quality weights
+[scoring.client_quality]
+verified_bonus = 40.0
+reputation_max = 30.0   # scaled 0–5 stars
+age_senior_days = 365
+age_senior_bonus = 30.0
+age_junior_days = 90
+age_junior_bonus = 15.0
+
+# Complexity keywords (description scan)
+[scoring.complexity]
+keywords = [
+    "api",
+    "machine learning",
+    "ai",
+    "blockchain",
+    "scraping",
+    "automation",
+    "nlp",
+    "deep learning",
+    "trading",
+    "algorithm",
+    "integration",
+    "pipeline",
+    "bot",
+    "crawler",
+    "data pipeline",
+    "etl",
+    "websocket",
+    "microservice",
+]
+description_length_target = 1500 # chars for full length bonus
+keyword_hits_target = 4 # hits for full keyword bonus
+
+# Insights thresholds
+[scoring.insights]
+low_competition_bids = 8
+decent_budget_usd = 300
+high_rating_threshold = 3.5
+fresh_hours = 12
+high_competition_bids = 25
+very_low_budget_usd = 20
+new_account_days = 14
+high_velocity = 3.0         # bids/hr
+
+# ─────────────────────────────────────────────────────────────────────────────
+
+[api]
+base_url = "https://www.freelancer.com/api/projects/0.1/projects/active"
+sort_field = "submitdate"                                                # submitdate | bid_count | time_updated
+reverse_sort = true
+
+[cache]
+directory = "cache"

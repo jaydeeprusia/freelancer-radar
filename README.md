@@ -19,7 +19,7 @@ A powerful Streamlit dashboard to **find, score, and analyze Freelancer.com proj
 | ⚙️ **Dynamic Scoring Config** | Adjust weights with sliders, toggle factors on/off, save/load presets |
 | 📊 **Interactive Table** | Click any row to instantly load project details |
 | 🔎 **Advanced Filters** | Filter by budget (USD-normalised), bids, hours posted, client country, verified status, flags, skill count |
-| 💡 **AI-Style Insights** | Per-project "Why this is good" and "Risk factors" analysis |
+| 💡 **Insights** | Per-project "Why this is good" and "Risk factors" analysis |
 | 💾 **Daily Cache** | Avoid redundant API calls with automatic daily caching |
 
 ---
