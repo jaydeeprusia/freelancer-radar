@@ -5,53 +5,79 @@ import os
 import json
 from pathlib import Path
 from datetime import datetime
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+)
 
 _cfg_path = Path(__file__).parent / "config.toml"
 with open(_cfg_path, "rb") as _f:
     _cfg = tomllib.load(_f)
 
-BASE_URL  = _cfg["api"]["base_url"]
-SORT_FIELD   = _cfg["api"]["sort_field"]
+BASE_URL = _cfg["api"]["base_url"]
+SORT_FIELD = _cfg["api"]["sort_field"]
 REVERSE_SORT = str(_cfg["api"]["reverse_sort"]).lower()
-CACHE_DIR    = _cfg["cache"]["directory"]
+CACHE_DIR = _cfg["cache"]["directory"]
 
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 
-def get_cache_filename(query):
+def get_cache_filename(query: str) -> str:
     today = datetime.now().strftime("%Y-%m-%d")
     safe_query = query.replace(" ", "_").lower()
     return os.path.join(CACHE_DIR, f"{safe_query}_{today}.json")
 
 
-def load_from_cache(query):
+def load_from_cache(query: str) -> pd.DataFrame | None:
     filepath = get_cache_filename(query)
     if os.path.exists(filepath):
         with open(filepath, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return pd.DataFrame(data)
+            return pd.DataFrame(json.load(f))
     return None
 
 
-def save_to_cache(query, projects):
+def save_to_cache(query: str, projects: list) -> None:
     filepath = get_cache_filename(query)
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(projects, f, ensure_ascii=False, indent=2)
 
 
+@retry(
+    retry=retry_if_exception_type(requests.exceptions.RequestException),
+    wait=wait_exponential(multiplier=1, min=2, max=30),
+    stop=stop_after_attempt(4),
+    reraise=True,
+)
+def _fetch_page(headers: dict, params: dict) -> list:
+    response = requests.get(BASE_URL, headers=headers, params=params, timeout=15)
+    if response.status_code == 429:
+        raise requests.exceptions.RequestException("Rate limited (429)")
+    if response.status_code != 200:
+        raise requests.exceptions.RequestException(
+            f"HTTP {response.status_code}: {response.text[:200]}"
+        )
+    return response.json().get("result", {}).get("projects", [])
+
+
 def fetch_projects(
-    auth_token, query="", limit=20, max_price=100, pages=3, refresh_cache=False,
-    countries=None, languages=None
-):
+    auth_token: str,
+    query: str = "",
+    limit: int = 20,
+    max_price: int = 100,
+    pages: int = 3,
+    refresh_cache: bool = False,
+    countries: list | None = None,
+    languages: list | None = None,
+) -> pd.DataFrame:
 
-    # 🔁 Try cache first
     if not refresh_cache:
-        cached_df = load_from_cache(query)
-        if cached_df is not None:
-            print("Loaded from cache")
-            return cached_df
+        cached = load_from_cache(query)
+        if cached is not None:
+            return cached
 
-    all_projects = []
+    all_projects: list = []
 
     headers = {
         "freelancer-auth-v2": auth_token,
@@ -61,7 +87,7 @@ def fetch_projects(
     }
 
     for page in range(pages):
-        params = {
+        params: dict = {
             "query": query,
             "limit": limit,
             "offset": page * limit,
@@ -71,30 +97,23 @@ def fetch_projects(
             "sort_field": SORT_FIELD,
             "reverse_sort": REVERSE_SORT,
             "max_price": max_price,
+            "project_types[]": "fixed",
         }
-
         if countries:
             params["countries[]"] = countries
         if languages:
             params["languages[]"] = languages
-        
-        params["project_types[]"] = "fixed"  # Only fixed-price projects for now
 
-        response = requests.get(BASE_URL, headers=headers, params=params)
-
-        if response.status_code != 200:
-            print("Error:", response.text)
+        try:
+            projects = _fetch_page(headers, params)
+        except requests.exceptions.RequestException as e:
+            print(f"Page {page} failed after retries: {e}")
             break
-
-        data = response.json()
-        projects = data.get("result", {}).get("projects", [])
 
         if not projects:
             break
-
         all_projects.extend(projects)
 
-    # 💾 Save cache
     if all_projects:
         save_to_cache(query, all_projects)
 

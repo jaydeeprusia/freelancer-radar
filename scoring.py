@@ -1,9 +1,7 @@
 import tomllib
 from pathlib import Path
-from datetime import datetime, timedelta
-from forex_python.converter import CurrencyRates
+from difflib import SequenceMatcher
 
-# ── Load config ───────────────────────────────────────────────────────────────
 _cfg_path = Path(__file__).parent / "config.toml"
 with open(_cfg_path, "rb") as _f:
     _cfg = tomllib.load(_f)
@@ -18,45 +16,28 @@ _ins = _sc["insights"]
 
 THRESHOLD_BID      = _sc["threshold_bid"]
 THRESHOLD_CONSIDER = _sc["threshold_consider"]
-
 DEFAULT_WEIGHTS    = dict(_sc["weights"])
 COMPLEXITY_KEYWORDS: list[str] = _cx["keywords"]
-
-_fx_cache: dict = {}
-_cache_ttl = timedelta(hours=1)
-
-
-def _get_usd_rate(currency_code: str) -> float:
-    if currency_code in ("USD", "NA", None):
-        return 1.0
-    key = f"{currency_code}_USD"
-    entry = _fx_cache.get(key)
-    if entry and datetime.now() - entry["ts"] < _cache_ttl:
-        return entry["rate"]
-    try:
-        rate = float(CurrencyRates().get_rate(currency_code, "USD"))
-        _fx_cache[key] = {"rate": rate, "ts": datetime.now()}
-        return rate
-    except Exception:
-        fallback = {"EUR": 1.1, "GBP": 1.25, "CAD": 0.75, "AUD": 0.65, "INR": 0.012}
-        return fallback.get(currency_code, 1.0)
 
 
 # ── Component scorers (each returns 0–100) ────────────────────────────────────
 
 def skill_score(row, keywords: list[str]) -> float:
-    skills = row.get("skills_list", [])
+    skills = [s.lower() for s in row.get("skills_list", [])]
     if not skills or not keywords:
         return 0.0
-    matches = sum(1 for s in skills if s.lower() in keywords)
+    matches = sum(
+        1 for s in skills
+        if any(
+            k in s or s in k or SequenceMatcher(None, s, k).ratio() > 0.8
+            for k in keywords
+        )
+    )
     return min(matches / max(len(keywords), 1), 1.0) * 100
 
 
 def budget_score(row) -> float:
-    avg_usd = row.get("avg_budget_usd", 0)
-    if avg_usd <= 0:
-        rate = _get_usd_rate(row.get("currency_code", "USD"))
-        avg_usd = ((row.get("budget_min", 0) + row.get("budget_max", 0)) / 2) * rate
+    avg_usd = float(row.get("avg_budget_usd") or 0)
     if avg_usd >= _bt["excellent"]: return 100.0
     if avg_usd >= _bt["good"]:      return 75.0
     if avg_usd >= _bt["fair"]:      return 50.0

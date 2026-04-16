@@ -24,7 +24,6 @@ st.markdown(
     """
 <style>
     .block-container { padding-top: 1.5rem; }
-    .metric-label { font-size: 0.75rem !important; }
     div[data-testid="stExpander"] { border: 1px solid #2e3347; border-radius: 8px; }
     .stButton > button { border-radius: 6px; }
 </style>
@@ -40,14 +39,17 @@ st.divider()
 
 # ── Fetch UI ──────────────────────────────────────────────────────────────────
 with st.expander(
-    "🌐 Fetch Projects from Freelancer API",
-    expanded=not bool(st.session_state.get("df") is not None),
+    "🌐 Fetch Projects from Freelancer API", expanded="df" not in st.session_state
 ):
     auth_token = st.text_input(
         "Freelancer Auth Token",
         type="password",
         placeholder="Paste your freelancer-auth-v2 token",
     )
+    st.warning(
+        "⚠️ Never share this token — it gives full Freelancer account access.", icon="🔐"
+    )
+
     query = st.text_input(
         "Search Query", "python", placeholder="e.g. python, scraping, trading bot"
     )
@@ -78,7 +80,7 @@ with st.expander(
 
     bc1, bc2 = st.columns([1, 4])
     refresh_cache = bc2.checkbox("🔄 Refresh Cache")
-    if bc1.button("🚀 Fetch Projects", use_container_width=True):
+    if bc1.button("🚀 Fetch Projects", width="stretch"):
         if not auth_token:
             st.error("Enter your auth token first.")
         else:
@@ -169,7 +171,7 @@ with st.expander(
     st.caption(f"Active weight sum: `{total_w:.2f}` — auto-normalised during scoring")
     st.divider()
 
-    pc1, pc2, pc3 = st.columns([2, 1, 1])
+    pc1, pc2 = st.columns([2, 1])
     preset_name = pc1.text_input(
         "Preset name",
         "my_preset",
@@ -177,16 +179,19 @@ with st.expander(
         placeholder="Preset name",
     )
 
-    if pc2.button("💾 Save Preset", use_container_width=True):
-        fname = f"{preset_name}.json"
-        with open(fname, "w") as f:
-            json.dump({"weights": weights, "enabled": enabled}, f, indent=2)
-        st.success(f"Saved `{fname}`")
+    preset_json = json.dumps({"weights": weights, "enabled": enabled}, indent=2)
+    pc2.download_button(
+        "💾 Save Preset",
+        preset_json,
+        f"{preset_name}.json",
+        "application/json",
+        width="stretch",
+    )
 
     uploaded_preset = st.file_uploader(
         "📂 Load Preset (.json)", type=["json"], key="preset_upload"
     )
-    if st.button("📂 Apply Preset", use_container_width=True) and uploaded_preset:
+    if st.button("📂 Apply Preset", width="stretch") and uploaded_preset:
         st.session_state["loaded_preset"] = json.load(uploaded_preset)
         st.rerun()
 
@@ -194,23 +199,34 @@ with st.expander(
 st.sidebar.title("📡 Freelancer Radar")
 st.sidebar.divider()
 st.sidebar.header("🎯 Skill Keywords")
-# Get all unique skills from the dataframe
-all_skills = set()
-for skills in df["skills_list"].dropna():
-    if isinstance(skills, list):
-        all_skills.update(skill.lower() for skill in skills)
-all_skills = sorted(list(all_skills))
 
-keywords_raw = st.sidebar.multiselect(
-    "Skills",
-    options=all_skills,
-    default=["python", "api", "automation", "ai"] if all(skill in all_skills for skill in ["python", "api", "automation", "ai"]) else all_skills[:4],
-    help="Select skills to match against projects"
+all_skills = sorted(
+    {
+        s.lower()
+        for skills in df["skills_list"].dropna()
+        for s in (skills if isinstance(skills, list) else [])
+    }
 )
-keyword_list = [k.strip().lower() for k in keywords_raw if k.strip()]
+
+if not all_skills:
+    st.sidebar.info("No skills found in data. Try a broader query.")
+    keyword_list = []
+else:
+    default_kw = [
+        s for s in ["python", "api", "automation", "ai"] if s in all_skills
+    ] or all_skills[:4]
+    selected_kw = st.sidebar.multiselect(
+        "Skills",
+        options=all_skills,
+        default=default_kw,
+        help="Select skills to match against projects",
+    )
+    keyword_list = selected_kw
+
 df["score"] = df.apply(
     lambda r: calculate_score(r, keyword_list, weights, enabled), axis=1
 )
+df["score"] = df["score"].round().astype(int)
 df["decision"] = df["score"].apply(decision)
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -272,181 +288,215 @@ df_filtered = apply_filters(
 )
 df_filtered = df_filtered.sort_values("score", ascending=False)
 
-if df_filtered.empty:
-    st.warning(
-        "⚠️ No projects match the current filters. Try relaxing some constraints."
-    )
-    st.stop()
-
 # ═════════════════════════════════════════════════════════════════════════════
-# 📊  TABLE
+# TABS
 # ═════════════════════════════════════════════════════════════════════════════
-st.divider()
+tab_projects, tab_analytics = st.tabs(["📋 Projects", "📊 Analytics"])
 
-bid_col, consider_col, skip_col, total_col = st.columns(4)
-bid_col.metric("🟢 BID", len(df_filtered[df_filtered["decision"] == "BID"]))
-consider_col.metric(
-    "🟡 CONSIDER", len(df_filtered[df_filtered["decision"] == "CONSIDER"])
-)
-skip_col.metric("🔴 SKIP", len(df_filtered[df_filtered["decision"] == "SKIP"]))
-total_col.metric("📋 Total", len(df_filtered))
+with tab_projects:
+    if df_filtered.empty:
+        st.warning(
+            "⚠️ No projects match the current filters. Try relaxing some constraints."
+        )
+    else:
+        bid_col, consider_col, skip_col, total_col = st.columns(4)
+        bid_col.metric("🟢 BID", len(df_filtered[df_filtered["decision"] == "BID"]))
+        consider_col.metric(
+            "🟡 CONSIDER", len(df_filtered[df_filtered["decision"] == "CONSIDER"])
+        )
+        skip_col.metric("🔴 SKIP", len(df_filtered[df_filtered["decision"] == "SKIP"]))
+        total_col.metric("📋 Total", len(df_filtered))
 
-st.divider()
-st.subheader(f"📊 Project Opportunities")
+        st.divider()
+        st.subheader("📊 Project Opportunities")
 
-display_cols = [
-    "title",
-    "budget_min_usd",
-    "budget_max_usd",
-    # "currency_code",
-    "bid_count",
-    "client_verified",
-    "client_reputation",
-    "time_since_posted_hrs",
-    "skill_count",
-    # "flag_urgent",
-    # "flag_featured",
-    "score",
-    "decision",
-    "submitdate",
-]
-display_cols = [c for c in display_cols if c in df_filtered.columns]
-
-view_df = (
-    df_filtered[display_cols]
-    .rename(
-        columns={
-            "budget_min_usd": "min_usd",
-            "budget_max_usd": "max_usd",
-            "time_since_posted_hrs": "hrs_ago",
-            "client_reputation": "reputation",
-        }
-    )
-    .copy()
-)
-table_event = st.dataframe(
-    view_df,
-    width="stretch",
-    height=420,
-    key="project_table",
-    on_select="rerun",
-    selection_mode="single-row",
-)
-
-selected_project_key = "selected_index"
-if (
-    selected_project_key not in st.session_state
-    or st.session_state[selected_project_key] not in df_filtered.index
-):
-    st.session_state[selected_project_key] = df_filtered.index[0]
-
-selected_rows = getattr(getattr(table_event, "selection", None), "rows", [])
-if selected_rows:
-    row_pos = selected_rows[0]
-    if 0 <= row_pos < len(df_filtered):
-        st.session_state[selected_project_key] = df_filtered.index[row_pos]
-
-# ═════════════════════════════════════════════════════════════════════════════
-# 📌  PROJECT DETAIL
-# ═════════════════════════════════════════════════════════════════════════════
-st.divider()
-
-default_idx = st.session_state.get("selected_index", df_filtered.index[0])
-if default_idx not in df_filtered.index:
-    default_idx = df_filtered.index[0]
-
-selected_index = st.selectbox(
-    "🔎 Select Project",
-    df_filtered.index,
-    key=selected_project_key,
-    format_func=lambda x: f"{df_filtered.loc[x, 'score']:.0f}  |  {df_filtered.loc[x, 'title']}",
-)
-
-row = df_filtered.loc[selected_index]
-sign = (
-    row["currency"].get("sign", "$") if isinstance(row.get("currency"), dict) else "$"
-)
-code = (
-    row["currency"].get("code", "NA") if isinstance(row.get("currency"), dict) else "NA"
-)
-
-url = f"https://www.freelancer.com/projects/{row.get('seo_url', '')}"
-st.markdown(f"## [{row['title']}]({url})")
-
-flags = []
-if row.get("flag_urgent"):
-    flags.append("🔥 Urgent")
-if row.get("flag_featured"):
-    flags.append("⭐ Featured")
-if row.get("flag_nda"):
-    flags.append("🔒 NDA")
-if row.get("flag_premium"):
-    flags.append("💎 Premium")
-if flags:
-    st.markdown("  ".join(f"`{f}`" for f in flags))
-
-st.divider()
-m1, m2, m3, m4 = st.columns(4)
-m1.metric("Min Budget", f"{sign}{row['budget_min']:.0f}")
-m2.metric("Max Budget", f"{sign}{row['budget_max']:.0f}")
-m3.metric("Avg (USD)", f"${row.get('avg_budget_usd', 0):.0f}")
-m4.metric("Bids", int(row["bid_count"]))
-
-m5, m6, m7, m8 = st.columns(4)
-m5.metric("Score", f"{row['score']:.0f}")
-m6.metric("Decision", row["decision"])
-m7.metric("Posted", f"{row.get('time_since_posted_hrs', 0):.1f}h ago")
-m8.metric("Verified", "✅" if row["client_verified"] else "❌")
-
-st.divider()
-d1, d2 = st.columns(2)
-d1.markdown(f"**🌍 Client Country:** `{row.get('client_country_code', 'NA').upper()}`")
-d1.markdown(f"**⭐ Reputation:** `{row.get('client_reputation', 0):.1f} / 5`")
-d1.markdown(f"**📅 Account Age:** `{row.get('client_account_age_days', 0):.0f} days`")
-d2.markdown(f"**🛠 Skills:** {', '.join(f'`{s}`' for s in row['skills_list'])}")
-
-# ── Score breakdown ───────────────────────────────────────────────────────────
-with st.expander("📐 Score Breakdown"):
-    components = get_component_scores(row, keyword_list)
-    comp_df = pd.DataFrame(
-        [
-            {
-                "Factor": k.title(),
-                "Raw Score": v,
-                "Weight": f"{weights.get(k, DEFAULT_WEIGHTS[k]):.2f}",
-                "Enabled": "✅" if enabled.get(k, True) else "❌",
-            }
-            for k, v in components.items()
+        display_cols = [
+            "title",
+            "budget_min_usd",
+            "budget_max_usd",
+            "bid_count",
+            "client_verified",
+            "client_reputation",
+            "time_since_posted_hrs",
+            "skill_count",
+            "score",
+            "decision",
+            "submitdate",
         ]
-    )
-    st.dataframe(comp_df, width="stretch", hide_index=True)
+        display_cols = [c for c in display_cols if c in df_filtered.columns]
 
-# ── Description ───────────────────────────────────────────────────────────────
-with st.expander("🧾 Description", expanded=True):
-    st.write(row["description"])
+        view_df = (
+            df_filtered[display_cols]
+            .rename(
+                columns={
+                    "budget_min_usd": "min_usd",
+                    "budget_max_usd": "max_usd",
+                    "time_since_posted_hrs": "hrs_ago",
+                    "client_reputation": "reputation",
+                }
+            )
+            .copy()
+        )
+        table_event = st.dataframe(
+            view_df,
+            width="stretch",
+            height=420,
+            key="project_table",
+            on_select="rerun",
+            selection_mode="single-row",
+        )
 
-# ── Insights ───────────────────────────────────────────────────────────────
-st.divider()
-st.subheader("🧠 Insights")
-good, risks = generate_insights(row)
+        selected_project_key = "selected_index"
+        if (
+            selected_project_key not in st.session_state
+            or st.session_state[selected_project_key] not in df_filtered.index
+        ):
+            st.session_state[selected_project_key] = df_filtered.index[0]
 
-icol1, icol2 = st.columns(2)
-with icol1:
-    st.markdown("**✅ Why this is good**")
-    for g in good:
-        st.success(g)
-    if not good:
-        st.info("No strong positives detected.")
+        selected_rows = getattr(getattr(table_event, "selection", None), "rows", [])
+        if selected_rows:
+            row_pos = selected_rows[0]
+            if 0 <= row_pos < len(df_filtered):
+                st.session_state[selected_project_key] = df_filtered.index[row_pos]
 
-with icol2:
-    st.markdown("**⚠️ Risk Factors**")
-    for r_ in risks:
-        st.warning(r_)
-    if not risks:
-        st.success("No significant risks detected.")
+        # ── Project detail ────────────────────────────────────────────────────
+        st.divider()
+        default_idx = st.session_state.get("selected_index", df_filtered.index[0])
+        if default_idx not in df_filtered.index:
+            default_idx = df_filtered.index[0]
+            st.session_state["selected_index"] = default_idx
 
+        selected_index = st.selectbox(
+            "🔎 Select Project",
+            df_filtered.index,
+            key="selected_index",
+            format_func=lambda x: f"{df_filtered.loc[x, 'score']}  |  {df_filtered.loc[x, 'title']}",
+        )
 
-# ── Export ────────────────────────────────────────────────────────────────────
-if st.button("📤 Export Top 15"):
-    df_filtered.head(15).to_csv("shortlist.csv", index=False)
-    st.success("Exported shortlist.csv")
+        row = df_filtered.loc[selected_index]
+        sign = (
+            row["currency"].get("sign", "$")
+            if isinstance(row.get("currency"), dict)
+            else "$"
+        )
+        code = (
+            row["currency"].get("code", "NA")
+            if isinstance(row.get("currency"), dict)
+            else "NA"
+        )
+
+        url = f"https://www.freelancer.com/projects/{row.get('seo_url', '')}"
+        st.markdown(f"## [{row['title']}]({url})")
+
+        flags = []
+        if row.get("flag_urgent"):
+            flags.append("🔥 Urgent")
+        if row.get("flag_featured"):
+            flags.append("⭐ Featured")
+        if row.get("flag_nda"):
+            flags.append("🔒 NDA")
+        if row.get("flag_premium"):
+            flags.append("💎 Premium")
+        if flags:
+            st.markdown("  ".join(f"`{f}`" for f in flags))
+
+        st.divider()
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Min Budget", f"{sign}{row['budget_min']:.0f} {code}")
+        m2.metric("Max Budget", f"{sign}{row['budget_max']:.0f} {code}")
+        m3.metric("Avg (USD)", f"${row.get('avg_budget_usd', 0):.0f}")
+        m4.metric("Bids", int(row["bid_count"]))
+
+        m5, m6, m7, m8 = st.columns(4)
+        m5.metric("Score", int(row["score"]))
+        m6.metric("Decision", row["decision"])
+        m7.metric("Posted", f"{row.get('time_since_posted_hrs', 0):.1f}h ago")
+        m8.metric("Verified", "✅" if row["client_verified"] else "❌")
+
+        st.divider()
+        d1, d2 = st.columns(2)
+        d1.markdown(
+            f"**🌍 Client Country:** `{row.get('client_country_code', 'NA').upper()}`"
+        )
+        d1.markdown(f"**⭐ Reputation:** `{row.get('client_reputation', 0):.1f} / 5`")
+        d1.markdown(
+            f"**📅 Account Age:** `{row.get('client_account_age_days', 0):.0f} days`"
+        )
+        d2.markdown(f"**🛠 Skills:** {', '.join(f'`{s}`' for s in row['skills_list'])}")
+
+        with st.expander("📐 Score Breakdown"):
+            components = get_component_scores(row, keyword_list)
+            comp_df = pd.DataFrame(
+                [
+                    {
+                        "Factor": k.title(),
+                        "Raw Score": v,
+                        "Weight": f"{weights.get(k, DEFAULT_WEIGHTS[k]):.2f}",
+                        "Enabled": "✅" if enabled.get(k, True) else "❌",
+                    }
+                    for k, v in components.items()
+                ]
+            )
+            st.dataframe(comp_df, width="stretch", hide_index=True)
+
+        with st.expander("🧾 Description", expanded=True):
+            st.write(row["description"])
+
+        st.divider()
+        st.subheader("🧠 Insights")
+        good, risks = generate_insights(row)
+        icol1, icol2 = st.columns(2)
+        with icol1:
+            st.markdown("**✅ Why this is good**")
+            for g in good:
+                st.success(g)
+            if not good:
+                st.info("No strong positives detected.")
+        with icol2:
+            st.markdown("**⚠️ Risk Factors**")
+            for r_ in risks:
+                st.warning(r_)
+            if not risks:
+                st.success("No significant risks detected.")
+
+        st.divider()
+        csv_data = df_filtered.head(15).to_csv(index=False)
+        st.download_button(
+            "📤 Export Top 15 to CSV", csv_data, "shortlist.csv", "text/csv"
+        )
+
+with tab_analytics:
+    if df_filtered.empty:
+        st.info("No data to visualise. Adjust filters.")
+    else:
+        st.subheader("📊 Score Distribution")
+        score_dist = (
+            df_filtered["decision"]
+            .value_counts()
+            .reindex(["BID", "CONSIDER", "SKIP"], fill_value=0)
+        )
+        st.bar_chart(score_dist)
+
+        st.divider()
+        st.subheader("💰 Budget vs Competition")
+        scatter_df = df_filtered[
+            ["avg_budget_usd", "bid_count", "decision", "title"]
+        ].copy()
+        scatter_df = scatter_df.rename(
+            columns={"avg_budget_usd": "Budget (USD)", "bid_count": "Bid Count"}
+        )
+        st.scatter_chart(scatter_df, x="Budget (USD)", y="Bid Count", color="decision")
+
+        st.divider()
+        st.subheader("🛠 Top Skills")
+        from collections import Counter
+
+        skill_counts = Counter(
+            s
+            for skills in df_filtered["skills_list"].dropna()
+            for s in (skills if isinstance(skills, list) else [])
+        )
+        top_skills = pd.DataFrame(
+            skill_counts.most_common(20), columns=["Skill", "Count"]
+        ).set_index("Skill")
+        st.bar_chart(top_skills)
