@@ -5,6 +5,7 @@
 
 A Streamlit dashboard that pulls live projects from the Freelancer.com API, scores them across 7 weighted factors, and surfaces the best opportunities — so you spend time bidding, not searching.
 
+[![Live Demo](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://freelancer-radar.streamlit.app)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.56-red?logo=streamlit)
 ![License](https://img.shields.io/badge/License-MIT-green)
